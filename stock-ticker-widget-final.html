@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Ticker Widget - Multiple Watchlists</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: transparent;
+            padding: 20px;
+        }
+
+        /* Light mode (default) */
+        .widget-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            margin: 0 auto;
+            color: #1f2937;
+        }
+
+        .widget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .widget-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .refresh-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #2563eb;
+        }
+
+        .refresh-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .tabs-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            background: #f3f4f6;
+            color: #4b5563;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            background: #e5e7eb;
+        }
+
+        .tab-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .watchlist-content {
+            display: none;
+        }
+
+        .watchlist-content.active {
+            display: block;
+        }
+
+        .stock-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .stock-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px;
+            background: #f9fafb;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .stock-item:hover {
+            background: #f3f4f6;
+        }
+
+        .stock-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .stock-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stock-symbol {
+            font-weight: 600;
+            font-size: 16px;
+            color: #1f2937;
+        }
+
+        .stock-name {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        .stock-chart {
+            margin-left: 16px;
+            flex-shrink: 0;
+        }
+
+        .stock-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .stock-price-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .stock-price {
+            font-size: 17px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .stock-change {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .stock-change.positive {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .stock-change.negative {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .stock-change.neutral {
+            background: #e5e7eb;
+            color: #4b5563;
+        }
+
+        .arrow {
+            font-size: 11px;
+        }
+
+        .loading {
+            text-align: center;
+            color: #6b7280;
+            padding: 20px;
+            font-size: 14px;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .last-updated {
+            text-align: center;
+            color: #9ca3af;
+            font-size: 12px;
+            margin-top: 16px;
+        }
+
+        .setup-notice {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .setup-notice strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* Dark mode styles */
+        @media (prefers-color-scheme: dark) {
+            .widget-container {
+                background: rgba(31, 41, 55, 0.95);
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+                color: #f9fafb;
+            }
+
+            .widget-header {
+                border-bottom-color: #374151;
+            }
+
+            .widget-title {
+                color: #f9fafb;
+            }
+
+            .tab-btn {
+                background: #374151;
+                color: #d1d5db;
+            }
+
+            .tab-btn:hover {
+                background: #4b5563;
+            }
+
+            .tab-btn.active {
+                background: #3b82f6;
+                color: white;
+            }
+
+            .stock-item {
+                background: #374151;
+            }
+
+            .stock-item:hover {
+                background: #4b5563;
+            }
+
+            .stock-symbol {
+                color: #f9fafb;
+            }
+
+            .stock-name {
+                color: #9ca3af;
+            }
+
+            .stock-price {
+                color: #f9fafb;
+            }
+
+            .stock-change.positive {
+                background: #064e3b;
+                color: #6ee7b7;
+            }
+
+            .stock-change.negative {
+                background: #7f1d1d;
+                color: #fca5a5;
+            }
+
+            .stock-change.neutral {
+                background: #374151;
+                color: #d1d5db;
+            }
+
+            .loading {
+                color: #9ca3af;
+            }
+
+            .error {
+                background: #7f1d1d;
+                color: #fca5a5;
+            }
+
+            .last-updated {
+                color: #6b7280;
+            }
+
+            .setup-notice {
+                background: #78350f;
+                color: #fef3c7;
+            }
+
+            .setup-notice a {
+                color: #fef3c7 !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="widget-container">
+        <div class="widget-header">
+            <h1 class="widget-title">📈 My Watchlists</h1>
+            <button class="refresh-btn" id="refreshBtn" onclick="loadCurrentWatchlist()">Refresh</button>
+        </div>
+        
+        <div id="setupNotice" class="setup-notice">
+            <strong>⚠️ Setup Required</strong>
+            Please add your Finnhub API key in the JavaScript code below. Get a free API key at 
+            <a href="https://finnhub.io/register" target="_blank" style="color: #92400e; text-decoration: underline;">finnhub.io/register</a>
+        </div>
+
+        <div class="tabs-container" id="tabsContainer"></div>
+
+        <div id="errorContainer"></div>
+        
+        <div id="watchlistsContainer"></div>
+
+        <div class="last-updated" id="lastUpdated"></div>
+    </div>
+
+    <script>
+        // ============================================
+        // CONFIGURATION - UPDATE THESE VALUES
+        // ============================================
+        
+        // Get your free API key from https://finnhub.io/register
+        const FINNHUB_API_KEY = 'd4dnq39r01qmhtc5bn9gd4dnq39r01qmhtc5bna0';
+        
+        // Define multiple watchlists
+        // Add or remove watchlists as needed
+        const WATCHLISTS = {
+            'Momentum Tech': [
+                'AAPL',   // Apple
+                'GOOGL',  // Google
+                'MSFT',   // Microsoft
+                'AMZN',   // Amazon
+                'META',   // Meta
+                'NVDA',   // NVIDIA
+                'MU',     // Micron
+                'TSM',    // Taiwan Semiconductor
+                'AMD',    // AMD
+                'INTC',   // Intel
+                'TSLA'    // Tesla
+            ],
+        
+            'Index Funds': [
+                'SPY',    // S&P 500 ETF
+                'QQQ',    // Nasdaq 100 ETF
+                'SCHE',   // Schwab Emerging Markets
+                'SCHZ',   // Schwab Aggregate Bond
+                'SCHB',   // Schwab US Broad Market
+                'DIA',    // Dow Jones ETF
+                'IWM',    // Russell 2000 ETF
+                'VIX'     // Volatility Index
+            ],
+            'Growth': [
+                'TSLA',   // Tesla
+                'BB',     // BlackBerry
+                'NOK',    // Nokia
+                'NVO',    // Novo Nordisk
+                'ATAI',   // ATAI Life Sciences
+                'CMPS',   // Compass Pathways
+                'MNMD',   // Mind Medicine
+                'CYBN',   // Cybin
+                'GHRS'    // GH Research
+            ],
+            'Dividend': [
+                'JNJ',    // Johnson & Johnson
+                'PG',     // Procter & Gamble
+                'KO',     // Coca-Cola
+                'PEP',    // PepsiCo
+                'VZ',     // Verizon
+                'T'       // AT&T
+            ]
+        };
+
+        // Auto-refresh interval in seconds (set to 0 to disable)
+        const AUTO_REFRESH_SECONDS = 60;
+
+        // Chart settings
+        const CHART_WIDTH = 80;
+        const CHART_HEIGHT = 30;
+
+        // ============================================
+        // WIDGET CODE - NO NEED TO EDIT BELOW
+        // ============================================
+
+        let autoRefreshInterval = null;
+        let currentWatchlist = Object.keys(WATCHLISTS)[0];
+        let stockDataCache = {};
+
+        async function fetchStockQuote(symbol) {
+            const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch ${symbol}: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            return { symbol, ...data };
+        }
+
+        async function fetchStockProfile(symbol) {
+            const url = `https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                return { name: symbol };
+            }
+            
+            const data = await response.json();
+            return { name: data.name || symbol };
+        }
+
+        async function fetchIntradayCandles(symbol) {
+            // Get intraday data (5-minute candles for the current day)
+            const now = Math.floor(Date.now() / 1000);
+            const startOfDay = now - (24 * 60 * 60); // Last 24 hours
+            
+            const url = `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=5&from=${startOfDay}&to=${now}&token=${FINNHUB_API_KEY}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                return null;
+            }
+            
+            const data = await response.json();
+            if (data.s === 'no_data' || !data.c || data.c.length === 0) {
+                return null;
+            }
+            
+            return data.c; // Return array of closing prices
+        }
+
+        function createSparkline(prices, currentPrice, openPrice) {
+            if (!prices || prices.length < 2) {
+                return '<svg width="' + CHART_WIDTH + '" height="' + CHART_HEIGHT + '"></svg>';
+            }
+
+            const min = Math.min(...prices);
+            const max = Math.max(...prices);
+            const range = max - min || 1;
+            
+            // Create points for the line
+            const points = prices.map((price, index) => {
+                const x = (index / (prices.length - 1)) * CHART_WIDTH;
+                const y = CHART_HEIGHT - ((price - min) / range) * CHART_HEIGHT;
+                return `${x},${y}`;
+            }).join(' ');
+
+            // Determine color based on day's performance
+            const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            let strokeColor;
+            
+            if (currentPrice > openPrice) {
+                strokeColor = isDarkMode ? '#6ee7b7' : '#10b981'; // Green
+            } else if (currentPrice < openPrice) {
+                strokeColor = isDarkMode ? '#fca5a5' : '#ef4444'; // Red
+            } else {
+                strokeColor = isDarkMode ? '#9ca3af' : '#6b7280'; // Gray
+            }
+
+            return `
+                <svg width="${CHART_WIDTH}" height="${CHART_HEIGHT}" style="display: block;">
+                    <polyline
+                        points="${points}"
+                        fill="none"
+                        stroke="${strokeColor}"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            `;
+        }
+
+        function formatPrice(price) {
+            return `$${price.toFixed(2)}`;
+        }
+
+        function formatChange(change, percentChange) {
+            const sign = change >= 0 ? '+' : '';
+            return `${sign}${change.toFixed(2)} (${sign}${percentChange.toFixed(2)}%)`;
+        }
+
+        function getChangeClass(change) {
+            if (change > 0) return 'positive';
+            if (change < 0) return 'negative';
+            return 'neutral';
+        }
+
+        function getArrow(change) {
+            if (change > 0) return '▲';
+            if (change < 0) return '▼';
+            return '●';
+        }
+
+        function createStockElement(stockData, profile, chartData) {
+            const changeClass = getChangeClass(stockData.d);
+            const arrow = getArrow(stockData.d);
+            const sparkline = createSparkline(chartData, stockData.c, stockData.o);
+            
+            return `
+                <div class="stock-item">
+                    <div class="stock-left">
+                        <div class="stock-info">
+                            <div class="stock-symbol">${stockData.symbol}</div>
+                            <div class="stock-name">${profile.name}</div>
+                        </div>
+                        <div class="stock-chart">
+                            ${sparkline}
+                        </div>
+                    </div>
+                    <div class="stock-right">
+                        <div class="stock-price-container">
+                            <div class="stock-price">${formatPrice(stockData.c)}</div>
+                            <div class="stock-change ${changeClass}">
+                                <span class="arrow">${arrow}</span>
+                                <span>${formatChange(stockData.d, stockData.dp)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showError(message) {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        function clearError() {
+            document.getElementById('errorContainer').innerHTML = '';
+        }
+
+        function updateLastUpdatedTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            document.getElementById('lastUpdated').textContent = `Last updated: ${timeString}`;
+        }
+
+        function initializeTabs() {
+            const tabsContainer = document.getElementById('tabsContainer');
+            const watchlistsContainer = document.getElementById('watchlistsContainer');
+            
+            Object.keys(WATCHLISTS).forEach(watchlistName => {
+                // Create tab button
+                const tabBtn = document.createElement('button');
+                tabBtn.className = 'tab-btn';
+                tabBtn.textContent = watchlistName;
+                tabBtn.onclick = () => switchWatchlist(watchlistName);
+                if (watchlistName === currentWatchlist) {
+                    tabBtn.classList.add('active');
+                }
+                tabsContainer.appendChild(tabBtn);
+
+                // Create watchlist content container
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'watchlist-content';
+                contentDiv.id = `watchlist-${watchlistName.replace(/\s+/g, '-')}`;
+                if (watchlistName === currentWatchlist) {
+                    contentDiv.classList.add('active');
+                }
+                contentDiv.innerHTML = '<div class="stock-list"><div class="loading">Loading stock data...</div></div>';
+                watchlistsContainer.appendChild(contentDiv);
+            });
+        }
+
+        function switchWatchlist(watchlistName) {
+            currentWatchlist = watchlistName;
+
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach((btn, index) => {
+                if (btn.textContent === watchlistName) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            // Update content visibility
+            document.querySelectorAll('.watchlist-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`watchlist-${watchlistName.replace(/\s+/g, '-')}`).classList.add('active');
+
+            // Load data if not already loaded
+            if (!stockDataCache[watchlistName]) {
+                loadCurrentWatchlist();
+            }
+        }
+
+        async function loadCurrentWatchlist() {
+            // Check if API key is set
+            if (FINNHUB_API_KEY === 'YOUR_API_KEY_HERE') {
+                showError('Please set your Finnhub API key in the configuration section.');
+                return;
+            }
+
+            // Hide setup notice once API key is configured
+            document.getElementById('setupNotice').style.display = 'none';
+
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = 'Loading...';
+            
+            clearError();
+
+            const contentId = `watchlist-${currentWatchlist.replace(/\s+/g, '-')}`;
+            const container = document.getElementById(contentId);
+            container.innerHTML = '<div class="stock-list"><div class="loading">Loading stock data...</div></div>';
+
+            try {
+                const tickers = WATCHLISTS[currentWatchlist];
+                
+                // Fetch all stock data in parallel
+                const stockPromises = tickers.map(symbol => 
+                    Promise.all([
+                        fetchStockQuote(symbol),
+                        fetchStockProfile(symbol),
+                        fetchIntradayCandles(symbol)
+                    ])
+                );
+
+                const results = await Promise.all(stockPromises);
+                
+                // Cache the results
+                stockDataCache[currentWatchlist] = results;
+                
+                // Create HTML for all stocks
+                const stockHTML = results.map(([quote, profile, chartData]) => 
+                    createStockElement(quote, profile, chartData)
+                ).join('');
+
+                container.innerHTML = `<div class="stock-list">${stockHTML}</div>`;
+                updateLastUpdatedTime();
+
+            } catch (error) {
+                console.error('Error loading stock data:', error);
+                showError('Failed to load stock data. Please check your API key and internet connection.');
+                container.innerHTML = '';
+            } finally {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = 'Refresh';
+            }
+        }
+
+        function setupAutoRefresh() {
+            if (AUTO_REFRESH_SECONDS > 0) {
+                autoRefreshInterval = setInterval(() => {
+                    // Clear cache and reload current watchlist
+                    stockDataCache = {};
+                    loadCurrentWatchlist();
+                }, AUTO_REFRESH_SECONDS * 1000);
+            }
+        }
+
+        // Initialize and load data when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeTabs();
+            loadCurrentWatchlist();
+            setupAutoRefresh();
+        });
+
+        // Clean up interval when page unloads
+        window.addEventListener('beforeunload', () => {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>
