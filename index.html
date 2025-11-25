@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -102,67 +102,51 @@
         .stock-list {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
         }
 
         .stock-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 14px;
+            padding: 10px 12px;
             background: #f9fafb;
             border-radius: 8px;
-            transition: background 0.2s;
+            transition: all 0.2s;
+            cursor: pointer;
+            position: relative;
         }
 
         .stock-item:hover {
             background: #f3f4f6;
         }
 
-        .stock-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex: 1;
+        .stock-item.expanded {
+            background: #e5e7eb;
         }
 
-        .stock-info {
+        .stock-main {
             display: flex;
-            flex-direction: column;
-            gap: 2px;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
         }
 
         .stock-symbol {
             font-weight: 600;
-            font-size: 16px;
+            font-size: 15px;
             color: #1f2937;
+            min-width: 70px;
         }
 
-        .stock-name {
-            font-size: 13px;
-            color: #6b7280;
-        }
-
-        .stock-chart {
-            margin-left: 16px;
-            flex-shrink: 0;
-        }
-
-        .stock-right {
+        .stock-price-info {
             display: flex;
             align-items: center;
             gap: 12px;
         }
 
-        .stock-price-container {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 2px;
-        }
-
         .stock-price {
-            font-size: 17px;
+            font-size: 15px;
             font-weight: 600;
             color: #1f2937;
         }
@@ -196,6 +180,43 @@
             font-size: 11px;
         }
 
+        .stock-chart-inline {
+            margin-left: 12px;
+        }
+
+        .stock-chart-expanded {
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #d1d5db;
+        }
+
+        .stock-item.expanded .stock-chart-expanded {
+            display: block;
+        }
+
+        .chart-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .company-name {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        .chart-stats {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
         .loading {
             text-align: center;
             color: #6b7280;
@@ -210,6 +231,7 @@
             border-radius: 6px;
             margin-bottom: 12px;
             font-size: 14px;
+            line-height: 1.5;
         }
 
         .last-updated {
@@ -232,6 +254,12 @@
         .setup-notice strong {
             display: block;
             margin-bottom: 4px;
+        }
+
+        .chart-hint {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-left: 8px;
         }
 
         /* Dark mode styles */
@@ -272,12 +300,12 @@
                 background: #4b5563;
             }
 
-            .stock-symbol {
-                color: #f9fafb;
+            .stock-item.expanded {
+                background: #4b5563;
             }
 
-            .stock-name {
-                color: #9ca3af;
+            .stock-symbol {
+                color: #f9fafb;
             }
 
             .stock-price {
@@ -297,6 +325,22 @@
             .stock-change.neutral {
                 background: #374151;
                 color: #d1d5db;
+            }
+
+            .stock-chart-expanded {
+                border-top-color: #4b5563;
+            }
+
+            .company-name {
+                color: #9ca3af;
+            }
+
+            .chart-stats {
+                color: #9ca3af;
+            }
+
+            .chart-hint {
+                color: #6b7280;
             }
 
             .loading {
@@ -354,7 +398,6 @@
         const FINNHUB_API_KEY = 'd4dnq39r01qmhtc5bn9gd4dnq39r01qmhtc5bna0';
         
         // Define multiple watchlists
-        // Add or remove watchlists as needed
         const WATCHLISTS = {
             'Momentum Tech': [
                 'AAPL',   // Apple
@@ -405,8 +448,10 @@
         const AUTO_REFRESH_SECONDS = 60;
 
         // Chart settings
-        const CHART_WIDTH = 80;
-        const CHART_HEIGHT = 30;
+        const INLINE_CHART_WIDTH = 60;
+        const INLINE_CHART_HEIGHT = 20;
+        const EXPANDED_CHART_WIDTH = 700;
+        const EXPANDED_CHART_HEIGHT = 120;
 
         // ============================================
         // WIDGET CODE - NO NEED TO EDIT BELOW
@@ -441,9 +486,8 @@
         }
 
         async function fetchIntradayCandles(symbol) {
-            // Get intraday data (5-minute candles for the current day)
             const now = Math.floor(Date.now() / 1000);
-            const startOfDay = now - (24 * 60 * 60); // Last 24 hours
+            const startOfDay = now - (24 * 60 * 60);
             
             const url = `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=5&from=${startOfDay}&to=${now}&token=${FINNHUB_API_KEY}`;
             const response = await fetch(url);
@@ -457,49 +501,67 @@
                 return null;
             }
             
-            return data.c; // Return array of closing prices
+            return {
+                close: data.c,
+                high: data.h,
+                low: data.l,
+                open: data.o,
+                timestamps: data.t
+            };
         }
 
-        function createSparkline(prices, currentPrice, openPrice) {
+        function createSparkline(prices, currentPrice, openPrice, width, height, showAxis = false) {
             if (!prices || prices.length < 2) {
-                return '<svg width="' + CHART_WIDTH + '" height="' + CHART_HEIGHT + '"></svg>';
+                return `<svg width="${width}" height="${height}"></svg>`;
             }
 
             const min = Math.min(...prices);
             const max = Math.max(...prices);
             const range = max - min || 1;
             
-            // Create points for the line
             const points = prices.map((price, index) => {
-                const x = (index / (prices.length - 1)) * CHART_WIDTH;
-                const y = CHART_HEIGHT - ((price - min) / range) * CHART_HEIGHT;
+                const x = (index / (prices.length - 1)) * width;
+                const y = height - ((price - min) / range) * height;
                 return `${x},${y}`;
             }).join(' ');
 
-            // Determine color based on day's performance
             const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
             let strokeColor;
             
             if (currentPrice > openPrice) {
-                strokeColor = isDarkMode ? '#6ee7b7' : '#10b981'; // Green
+                strokeColor = isDarkMode ? '#6ee7b7' : '#10b981';
             } else if (currentPrice < openPrice) {
-                strokeColor = isDarkMode ? '#fca5a5' : '#ef4444'; // Red
+                strokeColor = isDarkMode ? '#fca5a5' : '#ef4444';
             } else {
-                strokeColor = isDarkMode ? '#9ca3af' : '#6b7280'; // Gray
+                strokeColor = isDarkMode ? '#9ca3af' : '#6b7280';
             }
 
-            return `
-                <svg width="${CHART_WIDTH}" height="${CHART_HEIGHT}" style="display: block;">
-                    <polyline
-                        points="${points}"
-                        fill="none"
-                        stroke="${strokeColor}"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    />
-                </svg>
-            `;
+            const axisColor = isDarkMode ? '#4b5563' : '#d1d5db';
+            const textColor = isDarkMode ? '#9ca3af' : '#6b7280';
+
+            let svg = `<svg width="${width}" height="${height}" style="display: block;">`;
+            
+            if (showAxis) {
+                // Add grid lines
+                svg += `
+                    <line x1="0" y1="${height/2}" x2="${width}" y2="${height/2}" stroke="${axisColor}" stroke-width="0.5" stroke-dasharray="2,2"/>
+                    <text x="5" y="12" fill="${textColor}" font-size="10">$${max.toFixed(2)}</text>
+                    <text x="5" y="${height - 2}" fill="${textColor}" font-size="10">$${min.toFixed(2)}</text>
+                `;
+            }
+            
+            svg += `
+                <polyline
+                    points="${points}"
+                    fill="none"
+                    stroke="${strokeColor}"
+                    stroke-width="${showAxis ? '2' : '1.5'}"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                />
+            </svg>`;
+
+            return svg;
         }
 
         function formatPrice(price) {
@@ -523,31 +585,64 @@
             return '●';
         }
 
+        function toggleChart(symbol) {
+            const item = document.getElementById(`stock-${symbol}`);
+            if (item) {
+                item.classList.toggle('expanded');
+            }
+        }
+
         function createStockElement(stockData, profile, chartData) {
             const changeClass = getChangeClass(stockData.d);
             const arrow = getArrow(stockData.d);
-            const sparkline = createSparkline(chartData, stockData.c, stockData.o);
             
-            return `
-                <div class="stock-item">
-                    <div class="stock-left">
-                        <div class="stock-info">
-                            <div class="stock-symbol">${stockData.symbol}</div>
-                            <div class="stock-name">${profile.name}</div>
-                        </div>
-                        <div class="stock-chart">
-                            ${sparkline}
+            let inlineSparkline = '';
+            let expandedChart = '';
+            let chartHint = '';
+            
+            if (chartData && chartData.close) {
+                inlineSparkline = `
+                    <div class="stock-chart-inline">
+                        ${createSparkline(chartData.close, stockData.c, stockData.o, INLINE_CHART_WIDTH, INLINE_CHART_HEIGHT, false)}
+                    </div>
+                `;
+                
+                const dayHigh = Math.max(...chartData.high);
+                const dayLow = Math.min(...chartData.low);
+                
+                expandedChart = `
+                    <div class="stock-chart-expanded">
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <span class="company-name">${profile.name}</span>
+                                <span class="chart-stats">Day Range: $${dayLow.toFixed(2)} - $${dayHigh.toFixed(2)}</span>
+                            </div>
+                            ${createSparkline(chartData.close, stockData.c, stockData.o, EXPANDED_CHART_WIDTH, EXPANDED_CHART_HEIGHT, true)}
                         </div>
                     </div>
-                    <div class="stock-right">
-                        <div class="stock-price-container">
-                            <div class="stock-price">${formatPrice(stockData.c)}</div>
-                            <div class="stock-change ${changeClass}">
-                                <span class="arrow">${arrow}</span>
-                                <span>${formatChange(stockData.d, stockData.dp)}</span>
+                `;
+                
+                chartHint = '<span class="chart-hint">▼ click for chart</span>';
+            }
+            
+            return `
+                <div class="stock-item" id="stock-${stockData.symbol}" onclick="toggleChart('${stockData.symbol}')">
+                    <div class="stock-main">
+                        <div style="display: flex; align-items: center;">
+                            <div class="stock-symbol">${stockData.symbol}${chartHint}</div>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            ${inlineSparkline}
+                            <div class="stock-price-info">
+                                <div class="stock-price">${formatPrice(stockData.c)}</div>
+                                <div class="stock-change ${changeClass}">
+                                    <span class="arrow">${arrow}</span>
+                                    <span>${formatChange(stockData.d, stockData.dp)}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    ${expandedChart}
                 </div>
             `;
         }
@@ -572,7 +667,6 @@
             const watchlistsContainer = document.getElementById('watchlistsContainer');
             
             Object.keys(WATCHLISTS).forEach(watchlistName => {
-                // Create tab button
                 const tabBtn = document.createElement('button');
                 tabBtn.className = 'tab-btn';
                 tabBtn.textContent = watchlistName;
@@ -582,7 +676,6 @@
                 }
                 tabsContainer.appendChild(tabBtn);
 
-                // Create watchlist content container
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'watchlist-content';
                 contentDiv.id = `watchlist-${watchlistName.replace(/\s+/g, '-')}`;
@@ -597,7 +690,6 @@
         function switchWatchlist(watchlistName) {
             currentWatchlist = watchlistName;
 
-            // Update tab buttons
             document.querySelectorAll('.tab-btn').forEach((btn, index) => {
                 if (btn.textContent === watchlistName) {
                     btn.classList.add('active');
@@ -606,26 +698,22 @@
                 }
             });
 
-            // Update content visibility
             document.querySelectorAll('.watchlist-content').forEach(content => {
                 content.classList.remove('active');
             });
             document.getElementById(`watchlist-${watchlistName.replace(/\s+/g, '-')}`).classList.add('active');
 
-            // Load data if not already loaded
             if (!stockDataCache[watchlistName]) {
                 loadCurrentWatchlist();
             }
         }
 
         async function loadCurrentWatchlist() {
-            // Check if API key is set
             if (FINNHUB_API_KEY === 'YOUR_API_KEY_HERE') {
                 showError('Please set your Finnhub API key in the configuration section.');
                 return;
             }
 
-            // Hide setup notice once API key is configured
             document.getElementById('setupNotice').style.display = 'none';
 
             const refreshBtn = document.getElementById('refreshBtn');
@@ -641,7 +729,6 @@
             try {
                 const tickers = WATCHLISTS[currentWatchlist];
                 
-                // Fetch all stock data in parallel
                 const stockPromises = tickers.map(symbol => 
                     Promise.all([
                         fetchStockQuote(symbol),
@@ -652,10 +739,8 @@
 
                 const results = await Promise.all(stockPromises);
                 
-                // Cache the results
                 stockDataCache[currentWatchlist] = results;
                 
-                // Create HTML for all stocks
                 const stockHTML = results.map(([quote, profile, chartData]) => 
                     createStockElement(quote, profile, chartData)
                 ).join('');
@@ -665,7 +750,7 @@
 
             } catch (error) {
                 console.error('Error loading stock data:', error);
-                showError('Failed to load stock data. Please check your API key and internet connection.');
+                showError(`Failed to load stock data: ${error.message}`);
                 container.innerHTML = '';
             } finally {
                 refreshBtn.disabled = false;
@@ -676,21 +761,18 @@
         function setupAutoRefresh() {
             if (AUTO_REFRESH_SECONDS > 0) {
                 autoRefreshInterval = setInterval(() => {
-                    // Clear cache and reload current watchlist
                     stockDataCache = {};
                     loadCurrentWatchlist();
                 }, AUTO_REFRESH_SECONDS * 1000);
             }
         }
 
-        // Initialize and load data when page loads
         document.addEventListener('DOMContentLoaded', () => {
             initializeTabs();
             loadCurrentWatchlist();
             setupAutoRefresh();
         });
 
-        // Clean up interval when page unloads
         window.addEventListener('beforeunload', () => {
             if (autoRefreshInterval) {
                 clearInterval(autoRefreshInterval);
